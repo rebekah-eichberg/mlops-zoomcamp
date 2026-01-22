@@ -1,0 +1,99 @@
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    restart: always
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.12.1
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow
+      - mlruns:/mlruns
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root /mlflow/mlruns
+      --serve-artifacts
+      --artifacts-destination /mlflow/artifacts
+    restart: always
+
+  airflow-webserver:
+    build: .
+    image: 03-workflow-orchestration-airflow:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+
+      # Your project code import path:
+      PYTHONPATH: /opt/project/src
+
+      # This is the IMPORTANT bit:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR: "false"
+
+      # Optional but nice:
+      PROJECT_PATH: /opt/project
+      TAXI_DATA_FOLDER: /opt/project/data
+    volumes:
+      - .:/opt/project
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - mlruns:/mlruns
+    ports:
+      - "1995:8080"
+    command: webserver
+    restart: always
+
+  airflow-scheduler:
+    build: .
+    image: 03-workflow-orchestration-airflow:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+
+      PYTHONPATH: /opt/project/src
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR: "false"
+      PROJECT_PATH: /opt/project
+      TAXI_DATA_FOLDER: /opt/project/data
+    volumes:
+      - .:/opt/project
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - mlruns:/mlruns
+    command: scheduler
+    restart: always
+
+volumes:
+  postgres-db-volume:
+  mlflow-data:
+  mlruns:
