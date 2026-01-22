@@ -88,6 +88,16 @@ def train_model(X_train, y_train, X_val, y_val, dv):
 
         mlflow.xgboost.log_model(booster, artifact_path="models_mlflow")
         
+        Path("models").mkdir(exist_ok=True)
+        booster.save_model("models/model.xgb")
+
+        with open("models/preprocessor.b", "wb") as f_out:
+            pickle.dump(dv, f_out)
+
+       
+
+        print("Saved deploy artifacts to models/: preprocessor.b, model.xgb")
+        
         return run.info.run_id
 
 

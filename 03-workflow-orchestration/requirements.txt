@@ -4,3 +4,5 @@ numpy
 mlflow==2.12.1
 pyarrow
 xgboost
+fastapi
+uvicorn

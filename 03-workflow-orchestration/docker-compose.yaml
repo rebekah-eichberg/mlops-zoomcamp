@@ -92,6 +92,22 @@ services:
       - mlruns:/mlruns
     command: scheduler
     restart: always
+  
+  prediction-service:
+    build: .
+    image: 03-workflow-orchestration-airflow:latest
+    command: >
+      bash -lc "uvicorn duration_prediction.predict:app
+      --host 0.0.0.0 --port 9696"
+    environment:
+      - PYTHONPATH=/opt/project/src
+    volumes:
+      - ./:/opt/project
+    working_dir: /opt/project
+    ports:
+      - "9696:9696"
+    depends_on:
+      - mlflow
 
 volumes:
   postgres-db-volume:
